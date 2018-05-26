@@ -5,6 +5,9 @@ The cmdlet is **Clone-AutomationAccount**
 
 Clone-AutomationAccount basically does what the name suggests. It clones an automation account from one subscription to another. Currently, the plan is to provide switches to allow or Dis-allow Runbooks, Automation Variables, Modules from being copied. However, the default values of these switches is True. So if these are not provided as false explicitly, they are also cloned in the new automation account that gets created.
 
+**Development Process**
+All development is being done in the DEV branch which is merged after testing. Direct pushing to master branch is disabled.
+
  
  **IMPORTANT NOTE :**
   
