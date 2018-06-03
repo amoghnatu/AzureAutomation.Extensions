@@ -11,10 +11,13 @@ All development is being done in the DEV branch which is merged after testing. D
  
  **IMPORTANT NOTE :**
   
-This is still a work in progress and is NOT COMPLETE. I will keep updating this as an when I push new changes.
+**This is still a work in progress and is NOT COMPLETE. I will keep updating this as an when I push new changes.**
 
 
  ** Push Summary **
  *Watch below space for all the updates*
+
+ [03-JUNE-2018] - Fixed issues with Runbook import functionality
+				  Added code to copy vairables from source automation account to destination automation account.	
  
  [27-MAY-2018] - Added initial module files, base functions, basic code to create automation account in destination subscription. Also added code to copy runbooks from source automation account to destination automation account.
