@@ -65,12 +65,19 @@ function Clone-AutomationAccount {
 	Switch-AzureContext -SubscriptionId $SourceSubscriptionId
 	$SourceSubscriptionContext = Get-AzureRmContext
 	$DestinationSubscriptionContext = $null
-	if (!([string]::IsNullOrWhiteSpace($DestinationSubscriptionId)) -and ($SourceSubscriptionId -ne $DestinationSubscriptionId)) {
+	if ($SourceSubscriptionId -ne $DestinationSubscriptionId) {
+		if ([string]::IsNullOrWhiteSpace($DestinationSubscriptionId)) {
+			$DestinationSubscriptionId = $SourceSubscriptionId
+		}
 		Switch-AzureContext -SubscriptionId $DestinationSubscriptionId
 		$DestinationSubscriptionContext = Get-AzureRmContext
 
 		# Switching context back to source subscription
 		Switch-AzureContext -SubscriptionId $SourceSubscriptionId
+	}
+	else
+	{
+		$DestinationSubscriptionContext = $SourceSubscriptionContext
 	}
 
 	$SrcAA = Get-AzureRmAutomationAccount -ResourceGroupName $SourceAutomationAccountResourceGroup -Name $SourceAutomationAccount -AzureRmContext $SourceSubscriptionContext -ErrorAction SilentlyContinue
@@ -104,7 +111,7 @@ function Clone-AutomationAccount {
 	else {
 		Write-Output "Beginning copying of runbooks from $SourceAutomationAccount to $DestinationAutomationAccount"
 		$WorkFolder = New-TempFolder
-        $RunbooksInSourceAutomationAccount = Get-AzureRmAutomationRunbook -ResourceGroupName $SourceAutomationAccountResourceGroup -AutomationAccountName $SourceAutomationAccount
+        $RunbooksInSourceAutomationAccount = Get-AzureRmAutomationRunbook -ResourceGroupName $SourceAutomationAccountResourceGroup -AutomationAccountName $SourceAutomationAccount -AzureRmContext $SourceSubscriptionContext
 		if ($null -eq $RunbooksInSourceAutomationAccount) {
 			Write-Warning "There are no runbooks in automation account $SourceAutomationAccount. Proceeding to next step."
 		}
@@ -146,7 +153,7 @@ function Clone-AutomationAccount {
                     {
                         $RunbookType = $_.RunbookType
                     }
-					$null = Import-AzureRmAutomationRunbook -Path (Join-Path $WorkFolder ($($_.Name) + $extension)) -Description $_.Description -Name $_.Name -Tags $_.Tags -Type $RunbookType -Published -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -Force
+					$null = Import-AzureRmAutomationRunbook -Path (Join-Path $WorkFolder ($($_.Name) + $extension)) -Description $_.Description -Name $_.Name -Tags $_.Tags -Type $RunbookType -Published -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -Force -AzureRmContext $DestinationSubscriptionContext
 				}
 				Write-Output "========================================================"
             }
@@ -157,6 +164,39 @@ function Clone-AutomationAccount {
 
 	#region Step-3 Copy Modules if that option is selected
 
+	#endregion
+
+	#region Step-4 Copy Variables if that option is selected
+	if (!$Variables) {
+		Write-Warning "Variables are not selected for copying. Skipping Variables"
+	}
+	else {
+		Write-Output "Beginning copying of variables from $SourceAutomationAccount to $DestinationAutomationAccount"
+		$VariablesInSourceAA = Get-AzureRmAutomationVariable -ResourceGroupName $SourceAutomationAccountResourceGroup -AutomationAccountName $SourceAutomationAccount -AzureRmContext $SourceSubscriptionContext
+		$VariablesInSourceAA | ForEach-Object {
+			$CurrentVariableInDestination = Get-AzureRmAutomationVariable -Name $_.Name -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -AzureRmContext $DestinationSubscriptionContext -ErrorAction SilentlyContinue
+			if (-not $CurrentVariableInDestination) {
+				# No such variable in destination. Create it.
+				Write-Output "Creating variable $($_.Name) in Automation Variable : $DestinationAutomationAccount."
+				$null = New-AzureRmAutomationVariable -Name $_.Name -Encrypted $_.Encrypted -Description $_.Description -Value $_.Value -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -AzureRmContext $DestinationSubscriptionContext
+			}
+			elseif (!$CurrentVariableInDestination.Encrypted -and ($CurrentVariableInDestination.Value -ne $_.Value))
+			{
+				Write-Output "Updating value of variable : $($_.Name) in automation account $DestinationAutomationAccount."
+				$null = Set-AzureRmAutomationVariable -Name $_.Name -Encrypted $false -Value $_.Value -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -AzureRmContext $DestinationSubscriptionContext
+			}
+			elseif ($CurrentVariableInDestination.Encrypted)
+			{
+				Write-Output "Updating value of variable : $($_.Name) in automation account $DestinationAutomationAccount."
+                $null = Remove-AzureRmAutomationVariable -Name $_.Name -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -AzureRmContext $DestinationSubscriptionContext
+				$null = New-AzureRmAutomationVariable -Name $_.Name -Encrypted $true -Value $_.Value -ResourceGroupName $DestinationAutomationAccountResourceGroup -AutomationAccountName $DestinationAutomationAccount -AzureRmContext $DestinationSubscriptionContext
+			}
+			else
+			{
+				Write-Output "Value of variable $($_.Name) already up-to-date."
+			}
+		}
+	}
 	#endregion
 
 	#endregion
